@@ -1,0 +1,145 @@
+import streamlit as st
+import pandas as pd
+import traceback
+import io
+from datetime import datetime
+
+def improved_transform_to_new_format(df_filtered):
+    """
+    필터링된 데이터를 새 포맷으로 변환하는 개선된 함수
+    
+    Args:
+        df_filtered: 필터링된 데이터프레임
+        
+    Returns:
+        DataFrame: 변환된 데이터프레임
+    """
+    # 원본 데이터 디버깅
+    st.write("원본 데이터 샘플:", df_filtered.head())
+    
+    # 빈 문자열을 NA로 변환
+    df_filtered = df_filtered.replace('', pd.NA)
+    
+    # 필수 열이 모두 있는지 확인
+    required_cols = ['면허번호', '성명', '이수년도']
+    if not all(col in df_filtered.columns for col in required_cols):
+        missing = [col for col in required_cols if col not in df_filtered.columns]
+        st.error(f"필수 열이 누락됨: {missing}")
+        return pd.DataFrame()
+    
+    # 데이터 직접 할당 (대량 변환 방식)
+    data = []
+    for idx, row in df_filtered.iterrows():
+        # 필수 값 확인
+        if pd.isna(row['면허번호']) or pd.isna(row['성명']) or pd.isna(row['이수년도']):
+            st.write(f"행 {idx} 제외: 필수 값 누락 - {row['성명']} {row['면허번호']}")
+            continue
+            
+        # 새 행 구성 - 딕셔너리로 생성 (정수형으로 변환)
+        new_row = {
+            '연번': len(data) + 1,
+            '성명': row['성명'],
+            '면허번호': int(pd.to_numeric(row['면허번호'], errors='coerce') or 0),
+            '직종': 15,
+            '보수교육 이수년도': int(pd.to_numeric(row['이수년도'], errors='coerce') or 0),
+            '보수교육 이수시간': int(pd.to_numeric(row['총평점'], errors='coerce') or 0) if '총평점' in row and not pd.isna(row['총평점']) else 0,
+            '장기 휴직자구분': 1,  # 기본값
+            '필수교육 이수시간': 1 if pd.to_numeric(row['이수년도'], errors='coerce') > 2019 else 0,
+            '회원 아이디': ''
+        }
+        
+        # 장기 휴직자구분 매핑 (있는 경우)
+        if '대상구분' in row and not pd.isna(row['대상구분']):
+            mapping = {'대상': 1, '비대상1': 2, '비대상2': 3, '비대상3': 4}
+            new_row['장기 휴직자구분'] = mapping.get(row['대상구분'], 1)
+        
+        # 데이터 추가
+        data.append(new_row)
+    
+    # 데이터가 없으면 빈 데이터프레임 반환
+    if not data:
+        st.error("변환할 유효한 데이터가 없습니다.")
+        return pd.DataFrame()
+    
+    # 데이터프레임 생성
+    new_df = pd.DataFrame(data)
+    
+    # 결과 출력
+    st.write(f"변환된 데이터: {len(new_df)}행")
+    st.write("변환 결과 샘플:", new_df.head())
+    
+    return new_df
+
+def create_completion_excel(new_format_df, excel_option="기본 형식"):
+    """
+    보수교육 완료자 명단 엑셀 파일 생성
+    
+    Args:
+        new_format_df: 변환된 데이터프레임
+        excel_option: 엑셀 파일 형식 옵션
+    
+    Returns:
+        tuple: (BytesIO 객체, 파일명)
+    """
+    buffer = io.BytesIO()
+    
+    if excel_option == "기본 형식":
+        # 기본 형식 - 간단한 엑셀 변환
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            new_format_df.to_excel(writer, index=False, sheet_name='Data')
+    else:
+        # 테두리 서식 적용 - 상세 서식 지정
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            new_format_df.to_excel(writer, index=False, sheet_name='Data')
+            
+            # 워크시트와 workbook 객체 가져오기
+            workbook = writer.book
+            worksheet = writer.sheets['Data']
+            
+            # 헤더 서식 설정
+            header_fmt = workbook.add_format({
+                'bold': True, 
+                'border': 1,
+                'bg_color': '#D9E1F2',
+                'align': 'center',
+                'valign': 'vcenter'
+            })
+            
+            # 데이터 셀 서식 설정
+            cell_fmt = workbook.add_format({'border': 1})
+            
+            # 헤더에 서식 적용
+            for col_num, col_name in enumerate(new_format_df.columns):
+                worksheet.write(0, col_num, col_name, header_fmt)
+            
+            # 데이터 셀에 서식 적용
+            for row_num in range(1, len(new_format_df) + 1):
+                for col_num in range(len(new_format_df.columns)):
+                    # 조건부 서식을 사용하여 모든 셀에 테두리 적용
+                    worksheet.conditional_format(
+                        row_num, col_num, row_num, col_num,
+                        {'type': 'no_blanks', 'format': cell_fmt}
+                    )
+                    worksheet.conditional_format(
+                        row_num, col_num, row_num, col_num,
+                        {'type': 'blanks', 'format': cell_fmt}
+                    )
+            
+            # 열 너비 조정
+            worksheet.set_column('A:A', 5)   # 연번
+            worksheet.set_column('B:B', 10)  # 성명
+            worksheet.set_column('C:C', 10)  # 면허번호
+            worksheet.set_column('D:D', 5)   # 직종
+            worksheet.set_column('E:E', 12)  # 보수교육 이수년도
+            worksheet.set_column('F:F', 12)  # 보수교육 이수시간
+            worksheet.set_column('G:G', 15)  # 자기 종사지구분
+            worksheet.set_column('H:H', 15)  # 필수교육 이수시간
+            worksheet.set_column('I:I', 15)  # 회원 아이디
+    
+    buffer.seek(0)
+    
+    # 파일명 생성
+    today = datetime.now().strftime("%m%d")
+    download_filename = f"Data {today} 교육이수자.xlsx"
+    
+    return buffer, download_filename

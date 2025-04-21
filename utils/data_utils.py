@@ -105,3 +105,67 @@ def improved_filter_data(df, filter_year):
     print(f"빈 행 제거 후: {len(df_filtered)}행")
     
     return df_filtered, filter_message
+
+def preprocess_data(df, license_col=None, name_col=None):
+    """데이터 전처리 함수"""
+    if license_col is not None and name_col is not None:
+        # 선택된 열만 추출
+        df = df[[license_col, name_col]].copy()
+        # 열 이름 표준화
+        df.columns = ['면허번호', '성명']
+    
+    # NaN 값 제거
+    df = df.dropna()
+    
+    # 면허번호를 문자열로 변환하고 공백 제거
+    df['면허번호'] = df['면허번호'].astype(str).str.strip()
+    # 성명에서 공백 제거
+    df['성명'] = df['성명'].astype(str).str.strip()
+    
+    return df
+
+def get_data_overview(df1, df2):
+    """두 데이터프레임의 개요 정보를 계산하는 함수"""
+    # 두 파일 모두에 있는 면허번호 수
+    common = pd.merge(df1[['면허번호']], df2[['면허번호']], on='면허번호', how='inner')
+    common_count = len(common)
+    
+    # 첫 번째 파일에만 있는 데이터 (두 번째 파일에는 없는 데이터)
+    only_in_first = pd.merge(
+        df1, 
+        df2[['면허번호']], 
+        on='면허번호', 
+        how='left', 
+        indicator=True
+    )
+    only_in_first = only_in_first[only_in_first['_merge'] == 'left_only']
+    only_in_first_count = len(only_in_first)
+    
+    # 공통 데이터 계산
+    common_data = pd.merge(df1, df2, on='면허번호', how='inner', suffixes=('_1', '_2'))
+    
+    # 일치 여부 추가
+    common_data['상태'] = common_data.apply(
+        lambda row: '일치' if row['성명_1'] == row['성명_2'] else '불일치', 
+        axis=1
+    )
+    
+    # 일치/불일치 수 계산
+    matched_count = len(common_data[common_data['상태'] == '일치'])
+    unmatched_count = len(common_data[common_data['상태'] == '불일치'])
+    
+    # 일치율 계산
+    match_rate = (matched_count / common_count) * 100 if common_count > 0 else 0
+    
+    overview = {
+        'first_file_count': len(df1),
+        'second_file_count': len(df2),
+        'common_count': common_count,
+        'only_in_first_count': only_in_first_count,
+        'first_minus_common': len(df1) - common_count,
+        'matched_count': matched_count,
+        'unmatched_count': unmatched_count,
+        'match_rate': match_rate,
+    }
+    
+    return overview, common_data, only_in_first

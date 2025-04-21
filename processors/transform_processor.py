@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import traceback
 import io
 from datetime import datetime
@@ -143,3 +144,50 @@ def create_completion_excel(new_format_df, excel_option="기본 형식"):
     download_filename = f"Data {today} 교육이수자.xlsx"
     
     return buffer, download_filename
+
+def compare_license_data(df1, df2):
+    """첫 번째 파일(기준)과 두 번째 파일(비교대상)을 비교"""
+    # 두 파일 모두에 있는 데이터 비교
+    common_data = pd.merge(df1, df2, on='면허번호', how='inner', suffixes=('_1', '_2'))
+    
+    # 상태 열 추가
+    common_data['상태'] = np.where(
+        common_data['성명_1'] == common_data['성명_2'], 
+        '일치', 
+        '불일치'
+    )
+    
+    # 불일치하는 경우 차이점 표시
+    common_data['차이점'] = ''
+    mask = common_data['상태'] == '불일치'
+    common_data.loc[mask, '차이점'] = '성명 불일치'
+    
+    # 첫 번째 파일에만 있는 데이터 찾기 (두 번째 파일에는 없는 데이터)
+    only_in_first = pd.merge(
+        df1, 
+        df2[['면허번호']], 
+        on='면허번호', 
+        how='left', 
+        indicator=True
+    )
+    only_in_first = only_in_first[only_in_first['_merge'] == 'left_only']
+    only_in_first = only_in_first[['면허번호', '성명']]
+    only_in_first['상태'] = '두 번째 파일에 누락'
+    only_in_first['차이점'] = '두 번째 파일에 존재하지 않음'
+    
+    # 결과 집계
+    total_common = len(common_data)
+    matched = len(common_data[common_data['상태'] == '일치'])
+    unmatched = len(common_data[common_data['상태'] == '불일치'])
+    only_in_first_count = len(only_in_first)
+    
+    # 일치율 계산 (공통 데이터 내에서)
+    match_rate = (matched / total_common) * 100 if total_common > 0 else 0
+    
+    return common_data, only_in_first, {
+        '총 비교 레코드': total_common,
+        '일치 레코드': matched,
+        '불일치 레코드': unmatched,
+        '첫 번째 파일에만 있는 레코드': only_in_first_count,
+        '일치율': match_rate
+    }

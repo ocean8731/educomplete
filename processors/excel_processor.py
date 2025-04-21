@@ -62,3 +62,33 @@ def create_excel_download(df, confirmation_result):
     st.info(f"파일명: {download_filename}")
     if '이름' in df.columns:
         st.write(f"- 고유 사용자 수: {df['이름'].nunique()}")
+
+def load_excel_file(file):
+    """엑셀 파일을 로드하는 함수"""
+    try:
+        # 파일 확장자 확인
+        file_extension = file.name.split('.')[-1].lower()
+        
+        # 확장자에 따라 엔진 지정
+        if file_extension == 'xlsx':
+            engine = 'openpyxl'
+        elif file_extension == 'xls':
+            engine = 'xlrd'
+        else:
+            st.error(f"지원하지 않는 파일 형식입니다: {file_extension}")
+            return None
+        
+        # 엔진을 명시적으로 지정하여 파일 로드
+        return pd.read_excel(file, engine=engine)
+    except Exception as e:
+        st.error(f"파일 로드 중 오류가 발생했습니다: {e}")
+        return None
+
+def dataframe_to_excel(df):
+    """판다스 데이터프레임을 엑셀 파일로 변환하는 함수"""
+    output = io.BytesIO()
+    writer = pd.ExcelWriter(output, engine='openpyxl')
+    df.to_excel(writer, index=False, sheet_name='Sheet1')
+    writer.close()
+    processed_data = output.getvalue()
+    return processed_data

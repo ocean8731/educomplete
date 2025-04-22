@@ -45,7 +45,7 @@ def improved_transform_to_new_format(df_filtered):
             '보수교육 이수년도': int(pd.to_numeric(row['이수년도'], errors='coerce') or 0),
             '보수교육 이수시간': int(pd.to_numeric(row['총평점'], errors='coerce') or 0) if '총평점' in row and not pd.isna(row['총평점']) else 0,
             '장기 휴직자구분': 1,  # 기본값
-            '필수교육 이수시간': 1 if pd.to_numeric(row['이수년도'], errors='coerce') > 2019 else 0,
+            '필수교육 이수시간': 2 if pd.to_numeric(row['이수년도'], errors='coerce') > 2019 else 0,
             '회원 아이디': ''
         }
         

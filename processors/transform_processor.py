@@ -138,12 +138,43 @@ def create_completion_excel(new_format_df, excel_option="기본 형식"):
             worksheet.set_column('I:I', 15)  # 회원 아이디
     
     buffer.seek(0)
-    
+
     # 파일명 생성
     today = datetime.now().strftime("%m%d")
     download_filename = f"Data {today} 교육이수자.xlsx"
-    
+
     return buffer, download_filename
+
+
+def create_completion_excel_chunks(new_format_df, excel_option="기본 형식", chunk_size=100):
+    """
+    데이터가 chunk_size를 초과하면 여러 엑셀 파일로 분리하여 반환
+
+    Returns:
+        list of tuple: [(BytesIO, filename), ...]
+    """
+    today = datetime.now().strftime("%m%d")
+    total = len(new_format_df)
+
+    if total <= chunk_size:
+        buffer, filename = create_completion_excel(new_format_df, excel_option)
+        return [(buffer, filename)]
+
+    chunks = []
+    num_chunks = (total + chunk_size - 1) // chunk_size  # ceil division
+
+    for i in range(num_chunks):
+        chunk_df = new_format_df.iloc[i * chunk_size:(i + 1) * chunk_size].reset_index(drop=True)
+        buffer = io.BytesIO()
+
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            chunk_df.to_excel(writer, index=False, sheet_name='Data')
+
+        buffer.seek(0)
+        filename = f"Data {today} 교육이수자_{i + 1}.xlsx"
+        chunks.append((buffer, filename))
+
+    return chunks
 
 def compare_license_data(df1, df2):
     """첫 번째 파일(기준)과 두 번째 파일(비교대상)을 비교"""

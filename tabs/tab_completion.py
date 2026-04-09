@@ -4,7 +4,7 @@ from datetime import datetime
 import traceback
 from utils.file_utils import parse_html_xls
 from utils.data_utils import improved_filter_data
-from processors.transform_processor import improved_transform_to_new_format, create_completion_excel
+from processors.transform_processor import improved_transform_to_new_format, create_completion_excel, create_completion_excel_chunks
 
 def show_completion_tab():
     """보수교육 완료자 명단등록 탭을 표시하는 함수"""
@@ -165,24 +165,35 @@ def show_completion_tab():
                                         
                                         # 엑셀 파일 생성 및 다운로드 옵션
                                         st.subheader("📥 파일 다운로드")
-                                        
+
                                         # 엑셀 생성 옵션
                                         excel_option = st.radio(
                                             "엑셀 파일 형식:",
                                             ["기본 형식"]
                                         )
-                                        
-                                        # 엑셀 파일 생성
-                                        buffer, download_filename = create_completion_excel(new_format_df, excel_option)
-                                        
-                                        # 다운로드 버튼
-                                        st.download_button(
-                                            label="📥 변환된 파일 다운로드",
-                                            data=buffer,
-                                            file_name=download_filename,
-                                            mime="application/vnd.ms-excel"
-                                        )
-                                        
+
+                                        # 엑셀 파일 생성 (100개 초과 시 분리)
+                                        chunks = create_completion_excel_chunks(new_format_df, excel_option, chunk_size=100)
+
+                                        if len(chunks) == 1:
+                                            buffer, download_filename = chunks[0]
+                                            st.download_button(
+                                                label="📥 변환된 파일 다운로드",
+                                                data=buffer,
+                                                file_name=download_filename,
+                                                mime="application/vnd.ms-excel"
+                                            )
+                                        else:
+                                            st.info(f"데이터가 100개를 초과하여 총 {len(chunks)}개 파일로 분리됩니다.")
+                                            for idx, (buffer, download_filename) in enumerate(chunks, start=1):
+                                                st.download_button(
+                                                    label=f"📥 파일 {idx} 다운로드 ({download_filename})",
+                                                    data=buffer,
+                                                    file_name=download_filename,
+                                                    mime="application/vnd.ms-excel",
+                                                    key=f"download_chunk_{idx}"
+                                                )
+
                                         st.success(f"✅ 변환 작업 완료! 총 {len(new_format_df)}개 행이 변환되었습니다.")
                                     
                                 except Exception as e:

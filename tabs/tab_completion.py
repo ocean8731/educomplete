@@ -58,6 +58,13 @@ def show_completion_tab():
         remove_empty_rows = True
         validate_required_fields = True
 
+    split_option = st.selectbox(
+        "파일 분할 방식",
+        options=["분할 없음", "100개 단위로 분할", "1000개 단위로 분할"],
+        index=1,
+        key="split_option"
+    )
+
     if uploaded_html_filter:
         try:
             with st.spinner("파일 파싱 중..."):
@@ -149,12 +156,6 @@ def show_completion_tab():
             st.dataframe(new_format_df, height=300)
 
             st.subheader("📥 파일 다운로드")
-
-            split_option = st.selectbox(
-                "파일 분할 방식",
-                options=["분할 없음", "100개 단위로 분할", "1000개 단위로 분할"],
-                index=1
-            )
 
             chunk_size_map = {
                 "분할 없음": None,

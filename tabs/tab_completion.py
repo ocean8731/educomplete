@@ -150,7 +150,23 @@ def show_completion_tab():
 
             st.subheader("📥 파일 다운로드")
 
-            chunks = create_completion_excel_chunks(new_format_df, "기본 형식", chunk_size=100)
+            split_option = st.selectbox(
+                "파일 분할 방식",
+                options=["분할 없음", "100개 단위로 분할", "1000개 단위로 분할"],
+                index=1
+            )
+
+            chunk_size_map = {
+                "분할 없음": None,
+                "100개 단위로 분할": 100,
+                "1000개 단위로 분할": 1000,
+            }
+            chunk_size = chunk_size_map[split_option]
+
+            if chunk_size is None:
+                chunks = create_completion_excel_chunks(new_format_df, "기본 형식", chunk_size=len(new_format_df))
+            else:
+                chunks = create_completion_excel_chunks(new_format_df, "기본 형식", chunk_size=chunk_size)
 
             if len(chunks) == 1:
                 buffer, download_filename = chunks[0]
@@ -161,7 +177,7 @@ def show_completion_tab():
                     mime="application/vnd.ms-excel"
                 )
             else:
-                st.info(f"데이터가 100개를 초과하여 총 {len(chunks)}개 파일로 분리됩니다.")
+                st.info(f"데이터가 {chunk_size}개를 초과하여 총 {len(chunks)}개 파일로 분리됩니다.")
                 for idx, (buffer, download_filename) in enumerate(chunks, start=1):
                     st.download_button(
                         label=f"📥 파일 {idx} 다운로드 ({download_filename})",
